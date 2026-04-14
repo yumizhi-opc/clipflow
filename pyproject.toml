@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "clipflow"
+version = "1.0.0"
+description = "Agent-native CLI video editor — tutorial auto-cut pipeline"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Jing", email = "jing@chinawithme.com"},
+]
+keywords = ["video", "editor", "cli", "ai", "ffmpeg", "tutorial"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Multimedia :: Video",
+]
+
+dependencies = [
+    "click>=8.1",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "anthropic>=0.30",
+    "faster-whisper>=1.0",
+    "silero-vad>=5.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.4",
+]
+tts = [
+    "edge-tts>=6.1",
+]
+# v2 dependencies — not needed for v1
+ugc = [
+    "edge-tts>=6.1",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+clipflow = "clipflow.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
