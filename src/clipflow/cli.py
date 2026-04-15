@@ -220,6 +220,43 @@ def stage_editorial(project_dir: Path, editorial_json: Path):
     console.print(f"\n[green]EDL written.[/green] Next: clipflow stage cut {project_dir}")
 
 
+@stage.command("script")
+@click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
+@click.argument("script_json", type=click.Path(exists=True, path_type=Path))
+@click.option("--output", "-o", type=click.Path(path_type=Path), default=None,
+              help="Output readable script file (default: <project_dir>/insert_script.txt)")
+def stage_script(project_dir: Path, script_json: Path, output: Path | None):
+    """Generate a readable face-to-camera insert script.
+
+    \b
+    The insert script JSON is produced by the AI agent during editorial planning.
+    This command converts it to a human-readable recording guide.
+
+    \b
+    Input:  Project dir + insert_script.json (agent-generated)
+    Output: insert_script.txt (printable recording guide)
+
+    \b
+    Usage:
+      clipflow stage script out/ out/insert_script.json
+    """
+    from clipflow.stages.editorial import InsertScript
+
+    script = InsertScript.load(script_json)
+
+    out_dir = Path(project_dir)
+    output = output or out_dir / "insert_script.txt"
+
+    readable = script.to_readable()
+    output.write_text(readable, encoding="utf-8")
+
+    console.print(f"[bold]Insert Script[/bold] — {len(script.inserts)} face-to-camera inserts")
+    console.print(f"  Total recording time: {script.total_insert_time}")
+    console.print(f"  Script saved to: {output}")
+    console.print()
+    console.print(readable)
+
+
 @stage.command("plan")
 @click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
 def stage_plan(project_dir: Path):
@@ -366,8 +403,10 @@ def stage_render(project_dir: Path):
 @stage.command("export")
 @click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
 @click.option("--platform", "-p", multiple=True,
-              help="Target platforms (youtube, tiktok, instagram, twitter, shorts). Repeatable.")
-def stage_export(project_dir: Path, platform: tuple[str, ...]):
+              help="Target platforms (youtube, tiktok, instagram, twitter, xiaohongshu, shorts). Repeatable.")
+@click.option("--max-duration", type=int, default=None,
+              help="Override max duration in seconds (e.g. --max-duration 900 for 15min)")
+def stage_export(project_dir: Path, platform: tuple[str, ...], max_duration: int | None):
     """Stage 7: Export platform-specific variants.
 
     \b
@@ -376,8 +415,8 @@ def stage_export(project_dir: Path, platform: tuple[str, ...]):
 
     \b
     Examples:
-      clipflow stage export out/
-      clipflow stage export out/ -p youtube -p tiktok
+      clipflow stage export out/ -p xiaohongshu
+      clipflow stage export out/ -p xiaohongshu --max-duration 900
     """
     from clipflow.project import ProjectSpec, ExportFormat
     from clipflow.stages import export
@@ -410,11 +449,19 @@ def stage_export(project_dir: Path, platform: tuple[str, ...]):
 
     structure = Structure.load(spec.tutorial.structure_file)
 
+    # Override max duration if specified
+    if max_duration is not None:
+        from clipflow.stages.export import PLATFORM_PRESETS
+        for fmt in spec.export.formats:
+            if fmt.platform in PLATFORM_PRESETS:
+                PLATFORM_PRESETS[fmt.platform]["max_duration"] = max_duration
+
     def on_progress(stage, msg, pct):
         console.print(f"  [dim]{msg}[/dim]")
 
+    dur_note = f", max {max_duration}s" if max_duration else ""
     platforms_str = ", ".join(f.platform for f in spec.export.formats)
-    console.print(f"[bold]Stage 7: Export[/bold] — {platforms_str}")
+    console.print(f"[bold]Stage 7: Export[/bold] — {platforms_str}{dur_note}")
     results = export.run(spec, render_result, structure, on_progress=on_progress)
     spec.save()
 

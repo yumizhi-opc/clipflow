@@ -60,7 +60,7 @@ PLATFORM_PRESETS = {
     },
     "xiaohongshu": {
         "ratio": "16:9",
-        "max_duration": 300,  # 5 min sweet spot
+        "max_duration": 600,  # 10 min default
         "resolution": (1920, 1080),
         "codec": "h264",
         "crf": 18,
