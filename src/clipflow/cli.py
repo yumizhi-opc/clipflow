@@ -525,6 +525,41 @@ def stage_subtitle(video_file: Path, srt_file: Path, output: Path | None,
     console.print(f"  Size:   {size_mb:.1f}MB")
 
 
+@stage.command("copy")
+@click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
+@click.argument("copy_json", type=click.Path(exists=True, path_type=Path))
+def stage_copy(project_dir: Path, copy_json: Path):
+    """Save social media post copy to readable format.
+
+    \b
+    The post copy JSON is produced by the AI agent during editorial planning.
+    This command saves it as both JSON and a readable TXT file.
+
+    \b
+    Input:  Project dir + post_copy.json (agent-generated)
+    Output: post_copy.txt (ready to paste into xiaohongshu/tiktok)
+
+    \b
+    Usage:
+      clipflow stage copy out/ out/post_copy.json
+    """
+    from clipflow.stages.copywriting import PostCopy
+
+    copy = PostCopy.load(copy_json)
+    out_dir = Path(project_dir)
+
+    txt_path = out_dir / "post_copy.txt"
+    txt_path.write_text(copy.to_readable(), encoding="utf-8")
+
+    console.print(f"[bold]{copy.platform.upper()} Post Copy[/bold]")
+    console.print(f"  Title: {copy.title}")
+    console.print(f"  Hook:  {copy.hook_line}")
+    console.print(f"  Tags:  {' '.join('#' + t for t in copy.hashtags)}")
+    console.print(f"  Body:  {len(copy.body)} chars")
+    console.print(f"\n  Saved: {txt_path}")
+    console.print(f"\n{copy.to_readable()}")
+
+
 @stage.command("cover")
 @click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
 @click.option("--title-zh", type=str, required=True, help="Chinese title text")
