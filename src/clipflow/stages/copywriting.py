@@ -17,6 +17,17 @@ from pathlib import Path
 
 
 @dataclass
+class Chapter:
+    """A chapter marker with timestamp."""
+    title: str
+    start: float  # seconds
+
+    def format(self) -> str:
+        m, s = int(self.start // 60), int(self.start % 60)
+        return f"{m:02d}:{s:02d} {self.title}"
+
+
+@dataclass
 class PostCopy:
     """Complete social media post copy."""
     platform: str
@@ -24,6 +35,7 @@ class PostCopy:
     body: str            # main body text
     hashtags: list[str]  # hashtags without #
     hook_line: str       # first line that shows in feed
+    chapters: list[Chapter] | None = None  # chapter markers
 
     def save(self, path: str | Path):
         path = Path(path)
@@ -33,22 +45,52 @@ class PostCopy:
 
     def to_readable(self) -> str:
         tags = " ".join(f"#{t}" for t in self.hashtags)
-        return f"""{'=' * 50}
-{self.platform.upper()} 文案
-{'=' * 50}
+        sections = [
+            f"{'=' * 50}",
+            f"{self.platform.upper()} 发布包",
+            f"{'=' * 50}",
+            f"",
+            f"标题: {self.title}",
+            f"",
+            f"正文:",
+            self.body,
+            f"",
+            f"标签: {tags}",
+        ]
 
-标题: {self.title}
+        if self.chapters:
+            sections += [
+                f"",
+                f"{'─' * 50}",
+                f"章节 (粘贴到小红书/YouTube章节功能):",
+                f"",
+            ]
+            for ch in self.chapters:
+                sections.append(f"  {ch.format()}")
 
-正文:
-{self.body}
+        sections += [f"{'=' * 50}"]
+        return "\n".join(sections)
 
-标签: {tags}
-{'=' * 50}"""
+    def chapters_text(self) -> str:
+        """Chapter markers as copy-pasteable text."""
+        if not self.chapters:
+            return ""
+        return "\n".join(ch.format() for ch in self.chapters)
 
     @classmethod
     def load(cls, path: str | Path) -> PostCopy:
         data = json.loads(Path(path).read_text())
-        return cls(**data)
+        chapters = None
+        if data.get("chapters"):
+            chapters = [Chapter(**ch) for ch in data["chapters"]]
+        return cls(
+            platform=data["platform"],
+            title=data["title"],
+            body=data["body"],
+            hashtags=data["hashtags"],
+            hook_line=data["hook_line"],
+            chapters=chapters,
+        )
 
 
 def generate_xiaohongshu_copy(

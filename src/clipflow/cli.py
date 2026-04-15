@@ -525,6 +525,47 @@ def stage_subtitle(video_file: Path, srt_file: Path, output: Path | None,
     console.print(f"  Size:   {size_mb:.1f}MB")
 
 
+@stage.command("chapters")
+@click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
+@click.argument("chapters_json", type=click.Path(exists=True, path_type=Path))
+def stage_chapters(project_dir: Path, chapters_json: Path):
+    """Generate chapter markers for social media platforms.
+
+    \b
+    The chapters JSON is produced by the AI agent. Each entry has a title
+    and start time in seconds. This command outputs a copy-pasteable
+    chapter list for xiaohongshu, YouTube, etc.
+
+    \b
+    Input:  Project dir + chapters.json
+    Output: chapters.txt (MM:SS Title format, ready to paste)
+
+    \b
+    Usage:
+      clipflow stage chapters out/ out/chapters.json
+    """
+    import json
+
+    chapters = json.loads(chapters_json.read_text())
+    out_dir = Path(project_dir)
+
+    def fmt(s):
+        m, sec = int(s // 60), int(s % 60)
+        return f"{m:02d}:{sec:02d}"
+
+    lines = [f"{fmt(ch['start'])} {ch['title']}" for ch in chapters]
+    txt = "\n".join(lines)
+
+    txt_path = out_dir / "chapters.txt"
+    txt_path.write_text(txt, encoding="utf-8")
+
+    console.print(f"[bold]Chapters[/bold] — {len(chapters)} markers")
+    console.print()
+    for line in lines:
+        console.print(f"  {line}")
+    console.print(f"\n  Saved: {txt_path}")
+
+
 @stage.command("copy")
 @click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
 @click.argument("copy_json", type=click.Path(exists=True, path_type=Path))
