@@ -525,6 +525,141 @@ def stage_subtitle(video_file: Path, srt_file: Path, output: Path | None,
     console.print(f"  Size:   {size_mb:.1f}MB")
 
 
+@stage.command("splice")
+@click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
+@click.option("--inserts-dir", type=click.Path(exists=True, path_type=Path), default=None,
+              help="Directory containing insert_01.mp4 ... insert_N.mp4")
+def stage_splice(project_dir: Path, inserts_dir: Path | None):
+    """Splice screen segments with face-to-camera inserts.
+
+    \b
+    Reads the splice_plan from insert_script.json and interleaves
+    screen segments (from clipflow_out/segments/) with face inserts
+    (from inserts/ folder) into a single spliced video.
+
+    \b
+    Input:  Project dir with segments/ + inserts/ + insert_script.json
+    Output: spliced.mp4
+
+    \b
+    Examples:
+      clipflow stage splice out/
+      clipflow stage splice out/ --inserts-dir ../inserts/
+    """
+    import json
+    from clipflow.utils.ffmpeg import concat_files, probe_duration
+
+    out_dir = Path(project_dir)
+    if inserts_dir is None:
+        # Try common locations
+        for candidate in [out_dir.parent / "inserts", out_dir / "inserts"]:
+            if candidate.exists():
+                inserts_dir = candidate
+                break
+    if inserts_dir is None:
+        raise click.ClickException("No inserts directory found. Use --inserts-dir.")
+
+    script_file = out_dir / "insert_script.json"
+    if not script_file.exists():
+        raise click.ClickException(f"No insert_script.json found in {out_dir}")
+
+    script = json.loads(script_file.read_text())
+    if "splice_plan" not in script:
+        raise click.ClickException("insert_script.json has no splice_plan. Regenerate with editorial stage.")
+
+    segments_dir = out_dir / "segments"
+    sequence = script["splice_plan"]["sequence"]
+
+    file_list = []
+    for item in sequence:
+        if item["type"] == "screen":
+            f = segments_dir / f"seg_{item['segment']-1:04d}.mp4"
+            if not f.exists():
+                raise click.ClickException(f"Missing segment: {f}")
+            file_list.append(f)
+            console.print(f"  [dim]screen[/dim]  {f.name} ({probe_duration(f):.0f}s)  {item['label']}")
+        else:
+            f = inserts_dir / f"insert_{item['insert']:02d}.mp4"
+            if not f.exists():
+                raise click.ClickException(f"Missing insert: {f}. Record and save as insert_{item['insert']:02d}.mp4")
+            file_list.append(f)
+            console.print(f"  [bold]face[/bold]    {f.name} ({probe_duration(f):.0f}s)  {item['label']}")
+
+    spliced = out_dir / "spliced.mp4"
+    console.print(f"\n  Splicing {len(file_list)} files...")
+    concat_files(file_list, spliced)
+    dur = probe_duration(spliced)
+    size = spliced.stat().st_size / (1024 * 1024)
+
+    console.print(f"\n[green]Done.[/green]")
+    console.print(f"  Output:   {spliced}")
+    console.print(f"  Duration: {dur:.0f}s ({dur/60:.1f}min)")
+    console.print(f"  Size:     {size:.1f}MB")
+
+
+@stage.command("speed")
+@click.argument("video_file", type=click.Path(exists=True, path_type=Path))
+@click.option("--rate", "-r", type=float, default=1.5, help="Speed multiplier (default: 1.5)")
+@click.option("--output", "-o", type=click.Path(path_type=Path), default=None,
+              help="Output file (default: <input>_<rate>x.mp4)")
+def stage_speed(video_file: Path, rate: float, output: Path | None):
+    """Apply speed multiplier to a video.
+
+    \b
+    Adjusts both video and audio speed. Common rates:
+      1.25x — slightly faster, still natural
+      1.5x  — noticeably faster, good for tutorials
+      2.0x  — double speed, for montages
+
+    \b
+    Examples:
+      clipflow stage speed spliced.mp4
+      clipflow stage speed spliced.mp4 --rate 1.25
+      clipflow stage speed spliced.mp4 --rate 2.0 -o fast.mp4
+    """
+    import subprocess
+    from clipflow.utils.ffmpeg import probe_duration
+
+    if output is None:
+        rate_str = f"{rate:.1f}".replace(".", "_")
+        output = video_file.parent / f"{video_file.stem}_{rate_str}x{video_file.suffix}"
+
+    console.print(f"[bold]Speed[/bold] — {rate}x")
+
+    # Build audio tempo filter chain (atempo only supports 0.5-2.0 per instance)
+    audio_filters = []
+    remaining = rate
+    while remaining > 2.0:
+        audio_filters.append("atempo=2.0")
+        remaining /= 2.0
+    while remaining < 0.5:
+        audio_filters.append("atempo=0.5")
+        remaining /= 0.5
+    audio_filters.append(f"atempo={remaining:.4f}")
+    atempo_chain = ",".join(audio_filters)
+
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-i", str(video_file),
+            "-filter_complex",
+            f"[0:v]setpts=PTS/{rate}[v];[0:a]{atempo_chain}[a]",
+            "-map", "[v]", "-map", "[a]",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+            "-c:a", "aac",
+            str(output),
+        ],
+        capture_output=True, check=True,
+    )
+
+    dur = probe_duration(output)
+    size = output.stat().st_size / (1024 * 1024)
+
+    console.print(f"\n[green]Done.[/green]")
+    console.print(f"  Output:   {output}")
+    console.print(f"  Duration: {dur:.0f}s ({dur/60:.1f}min)")
+    console.print(f"  Size:     {size:.1f}MB")
+
+
 # ---------------------------------------------------------------------------
 # Resume from any stage
 # ---------------------------------------------------------------------------

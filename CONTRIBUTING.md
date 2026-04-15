@@ -37,9 +37,26 @@ Add an entry to `PLATFORM_PRESETS` in `src/clipflow/stages/export.py`:
 },
 ```
 
+## Adding a new CLI command
+
+Stage commands live in `cli.py` under the `@stage` group. Each stage command:
+1. Takes a `project_dir` argument
+2. Loads the project spec with `_load_spec()`
+3. Runs one focused operation
+4. Prints results to console
+
+## Key design decisions
+
+- **No libass dependency** — subtitles are burned via Pillow + ffmpeg pipe, so it works on any system
+- **Editorial plans are JSON** — the AI agent generates them, the CLI just executes
+- **Insert scripts are human-readable** — generated as both JSON (machine) and TXT (printable)
+- **Speed is a separate stage** — applied after splice, before subtitle burn
+- **Re-encode on cut** — always re-encode segments for frame-accurate cuts and proper audio sync
+
 ## Code style
 
 - Python 3.10+ (uses `X | Y` union types)
 - Ruff for linting: `ruff check src/`
 - Keep stages independently runnable — no hidden dependencies between stages
 - All ffmpeg calls go through `utils/ffmpeg.py`
+- Lazy imports for heavy dependencies (anthropic, faster-whisper)
