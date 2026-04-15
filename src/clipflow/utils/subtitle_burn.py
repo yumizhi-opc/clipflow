@@ -39,6 +39,64 @@ def load_srt(path: Path) -> list[SubtitleLine]:
     return lines
 
 
+def chunk_long_subtitles(subs: list[SubtitleLine], max_chars: int = 18, max_duration: float = 4.0) -> list[SubtitleLine]:
+    """Break long subtitle lines into shorter chunks for readability.
+
+    Splits at punctuation boundaries, targeting max_chars per line
+    and max_duration per subtitle.
+    """
+    import re
+    chunked = []
+    for sub in subs:
+        text = sub.text.strip()
+        duration = sub.end - sub.start
+
+        if len(text) <= max_chars and duration <= max_duration:
+            chunked.append(sub)
+            continue
+
+        # Split at Chinese punctuation
+        parts = re.split(r'([，。？！、；：])', text)
+
+        # Recombine parts with their punctuation
+        segments = []
+        current = ""
+        for p in parts:
+            if p in '，。？！、；：':
+                current += p
+                if len(current) >= max_chars * 0.6:
+                    segments.append(current.strip())
+                    current = ""
+            else:
+                if current and len(current) + len(p) > max_chars:
+                    segments.append(current.strip())
+                    current = p
+                else:
+                    current += p
+        if current.strip():
+            segments.append(current.strip())
+
+        # If no punctuation splits worked, split by character count
+        if len(segments) <= 1 and len(text) > max_chars:
+            segments = []
+            for i in range(0, len(text), max_chars):
+                segments.append(text[i:i + max_chars])
+
+        # Distribute time across segments
+        total_chars = sum(len(s) for s in segments)
+        current_time = sub.start
+        for seg in segments:
+            if not seg.strip():
+                continue
+            seg_duration = duration * (len(seg) / max(total_chars, 1))
+            seg_duration = max(seg_duration, 0.5)  # at least 0.5s
+            end_time = min(current_time + seg_duration, sub.end)
+            chunked.append(SubtitleLine(text=seg, start=current_time, end=end_time))
+            current_time = end_time
+
+    return chunked
+
+
 def _parse_srt_time(ts: str) -> float:
     ts = ts.replace(",", ".")
     parts = ts.split(":")
@@ -71,6 +129,9 @@ def burn_subtitles(
         import shutil
         shutil.copy2(video_path, output_path)
         return
+
+    # Auto-chunk long subtitles into readable lines
+    subs = chunk_long_subtitles(subs)
 
     from clipflow.utils.ffmpeg import probe_video_info, probe_duration
     info = probe_video_info(video_path)
