@@ -525,6 +525,66 @@ def stage_subtitle(video_file: Path, srt_file: Path, output: Path | None,
     console.print(f"  Size:   {size_mb:.1f}MB")
 
 
+@stage.command("cover")
+@click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
+@click.option("--title-zh", type=str, required=True, help="Chinese title text")
+@click.option("--title-en", type=str, required=True, help="English title text")
+@click.option("--subtitle-zh", type=str, default=None, help="Chinese subtitle")
+@click.option("--subtitle-en", type=str, default=None, help="English subtitle")
+@click.option("--tag", type=str, default=None, help="Tag pill text (e.g. 'EP03')")
+@click.option("--style", type=click.Choice(["bold-center", "split-top", "gradient-bar"]),
+              default="bold-center", help="Cover layout style")
+@click.option("--platform", type=click.Choice(["xiaohongshu", "tiktok", "reels", "youtube"]),
+              default="xiaohongshu", help="Target platform (determines size)")
+@click.option("--accent", type=str, default="#FF6B35", help="Accent color hex")
+@click.option("--frame", type=click.Path(exists=True, path_type=Path), default=None,
+              help="Background image/photo (default: extract from video)")
+@click.option("--frame-time", type=float, default=5.0,
+              help="Timestamp to extract frame from video (if no --frame)")
+def stage_cover(project_dir: Path, title_zh: str, title_en: str,
+                subtitle_zh: str | None, subtitle_en: str | None,
+                tag: str | None, style: str, platform: str, accent: str,
+                frame: Path | None, frame_time: float):
+    """Generate a cover image for social media.
+
+    \b
+    Creates eye-catching cover images with bilingual text overlay.
+    Three styles: bold-center, split-top, gradient-bar.
+
+    \b
+    Examples:
+      clipflow stage cover out/ --title-zh "AI帮我剪视频" --title-en "AI Edits My Video"
+      clipflow stage cover out/ --title-zh "..." --title-en "..." --style gradient-bar
+      clipflow stage cover out/ --title-zh "..." --title-en "..." --frame photo.jpg
+    """
+    from clipflow.stages.cover import generate_cover, CoverConfig, extract_best_frame
+
+    out_dir = Path(project_dir)
+
+    if frame is None:
+        # Try to find a video to extract from
+        for candidate in ["spliced.mp4", "cut.mp4", "rendered.mp4"]:
+            vid = out_dir / candidate
+            if vid.exists():
+                frame = out_dir / "cover_frame.jpg"
+                extract_best_frame(vid, frame, frame_time)
+                break
+
+    config = CoverConfig(
+        title_zh=title_zh, title_en=title_en,
+        subtitle_zh=subtitle_zh, subtitle_en=subtitle_en,
+        tag=tag, platform=platform, style=style, accent_color=accent,
+    )
+
+    output = out_dir / f"cover_{style}_{platform}.jpg"
+    generate_cover(config, background_image=frame, output_path=output)
+
+    console.print(f"[green]Done.[/green]")
+    console.print(f"  Style:    {style}")
+    console.print(f"  Platform: {platform}")
+    console.print(f"  Output:   {output}")
+
+
 @stage.command("splice")
 @click.argument("project_dir", type=click.Path(exists=True, path_type=Path))
 @click.option("--inserts-dir", type=click.Path(exists=True, path_type=Path), default=None,
